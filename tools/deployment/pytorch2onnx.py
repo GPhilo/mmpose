@@ -145,7 +145,8 @@ if __name__ == '__main__':
     msg += reset_style
     warnings.warn(msg)
 
-    model = init_pose_model(args.config, args.checkpoint, device='cpu')
+    ckpt = args.checkpoint if args.checkpoint.lower() != "none" else None
+    model = init_pose_model(args.config, ckpt, device='cpu')
     model = _convert_batchnorm(model)
 
     # onnx.export does not support kwargs
