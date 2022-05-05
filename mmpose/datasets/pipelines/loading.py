@@ -55,10 +55,18 @@ class LoadImageFromFile:
 
         if isinstance(image_file, (list, tuple)):
             # Load images from a list of paths
-            results['img'] = [self._read_image(path) for path in image_file]
+            ims = [self._read_image(path) for path in image_file]
+            if self.color_type == 'grayscale' and ims and ims[0] is not None and ims[0].ndim == 2:
+                # append channel dimension
+                ims = [im[...,None] for im in ims]
+            results['img'] = ims
         elif image_file is not None:
             # Load single image from path
-            results['img'] = self._read_image(image_file)
+            im = self._read_image(image_file)
+            if self.color_type == 'grayscale' and im is not None and im.ndim == 2:
+                # append channel dimension
+                im = im[...,None]
+            results['img'] = im
         else:
             if 'img' not in results:
                 # If `image_file`` is not in results, check the `img` exists
