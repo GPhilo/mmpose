@@ -6,3 +6,5 @@ from .mesh_transform import *  # noqa
 from .pose3d_transform import *  # noqa
 from .shared_transform import *  # noqa
 from .top_down_transform import *  # noqa
+from .bbox_from_characters_box_transform import * # noqa
+from .straug_transform import * # noqa
