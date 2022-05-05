@@ -26,6 +26,8 @@ from .top_down import (TopDownAicDataset, TopDownCocoDataset,
                        TopDownOCHumanDataset, TopDownPoseTrack18Dataset,
                        TopDownPoseTrack18VideoDataset)
 
+from .license_plate import LPCornersDataset
+
 __all__ = [
     'TopDownCocoDataset', 'BottomUpCocoDataset', 'BottomUpMhpDataset',
     'BottomUpAicDataset', 'BottomUpCocoWholeBodyDataset', 'TopDownMpiiDataset',
@@ -44,5 +46,5 @@ __all__ = [
     'AnimalATRWDataset', 'AnimalPoseDataset', 'TopDownH36MDataset',
     'TopDownHalpeDataset', 'TopDownPoseTrack18VideoDataset',
     'Body3DMviewDirectPanopticDataset', 'Body3DMviewDirectShelfDataset',
-    'Body3DMviewDirectCampusDataset'
+    'Body3DMviewDirectCampusDataset', 'LPCornersDataset'
 ]
