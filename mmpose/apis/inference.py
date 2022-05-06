@@ -148,7 +148,7 @@ def _inference_single_pose_model(model,
     # build the data pipeline
     test_pipeline = Compose(cfg.test_pipeline)
 
-    assert len(bboxes[0]) in [4, 5]
+    assert len(bboxes[0][0]) in [4, 5]
 
     if dataset_info is not None:
         dataset_name = dataset_info.dataset_name
@@ -243,7 +243,7 @@ def _inference_single_pose_model(model,
         dataset_name = dataset
 
     batch_data = []
-    for bbox in bboxes:
+    for bbox, char_bbox in bboxes:
         center, scale = _box2cs(cfg, bbox)
 
         # prepare data
@@ -268,7 +268,8 @@ def _inference_single_pose_model(model,
                 'image_size': np.array(cfg.data_cfg['image_size']),
                 'num_joints': cfg.data_cfg['num_joints'],
                 'flip_pairs': flip_pairs
-            }
+            },
+            'char_bbox': char_bbox
         }
         if isinstance(img_or_path, np.ndarray):
             data['img'] = img_or_path
@@ -390,6 +391,9 @@ def inference_top_down_pose_model(model,
         # format is already 'xywh'
         bboxes_xywh = bboxes
         bboxes_xyxy = _xywh2xyxy(bboxes)
+
+    # Add char_bbox
+    bboxes_xywh = [(bb, res['char_bbox']) for bb, res in zip(bboxes_xywh, person_results)]
 
     # if bbox_thr remove all bounding box
     if len(bboxes_xywh) == 0:
