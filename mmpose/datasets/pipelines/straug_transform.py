@@ -3,6 +3,7 @@ from PIL import Image, ImageOps
 import cv2
 import numpy as np
 
+
 def _get_max_preds(heatmaps):
   """Get keypoint predictions from score maps.
 
@@ -92,6 +93,24 @@ def _msra_generate_target(cfg, joints_3d, joints_3d_visible, sigma):
       target[joint_id][img_y[0]:img_y[1], img_x[0]:img_x[1]] = \
         g[g_y[0]:g_y[1], g_x[0]:g_x[1]]
   return target, target_weight
+
+def rotate(origin, points, degrees, compression_ratio):
+    """
+    Rotate a point counterclockwise by a given angle around a given origin.
+
+    The angle should be given in degrees.
+    """
+    angle = np.deg2rad(degrees)
+    s, c = np.sin(angle), np.cos(angle)
+    R = np.array([
+      [c,-s],
+      [s, c]
+    ], np.float32)
+
+    origin = np.atleast_2d(origin)
+    points = np.atleast_2d(points)
+    return np.squeeze((R @ ((points.T-origin.T)*compression_ratio) + origin.T).T)
+
 
 class Curve:
   '''Adaptation of straug.warp.Curve that also warps keypoints in the image'''
@@ -183,7 +202,10 @@ class Curve:
 
     new_kps = []
     for hm in heatmaps:
-      resized = np.asarray(Image.fromarray(hm).resize((self.side, self.side), Image.BICUBIC))
+      resized = Image.fromarray(hm).resize((self.side, self.side), Image.BICUBIC)
+      if isflip:
+        resized = ImageOps.flip(resized)
+      resized = np.asarray(resized)
       warped = self.tps.warpImage(resized)
       # warped image is still a square, need to convert coords back to original refrence frame
       # Dumb implementation: Just do the same as we do for img before getting the location
@@ -202,7 +224,46 @@ class Curve:
 
       new_kps.append(loc.squeeze().tolist()+[0])
 
-    return img, np.asarray(new_kps)
+    return img, np.asarray(new_kps).astype(np.float32)
+
+
+class Rotate:
+  '''Adaptation of straug.geometry.Curve that also warps keypoints in the image'''
+  def __init__(self, square_side=224, rng=None):
+    self.side = square_side
+    self.rng = np.random.default_rng() if rng is None else rng
+
+  def __call__(self, img, joints_3d, iscurve=False, mag=-1, prob=1.):
+    if self.rng.uniform(0, 1) > prob:
+      return img
+
+    w, h = img.size
+
+    if h != self.side or w != self.side:
+      img = img.resize((self.side, self.side), Image.BICUBIC)
+
+    b = [15, 30, 45]
+    if mag < 0 or mag >= len(b):
+      index = 1
+    else:
+      index = mag
+    rotate_angle = b[index]
+
+    angle = self.rng.uniform(rotate_angle - 20, rotate_angle)
+    if self.rng.uniform(0, 1) < 0.5:
+      angle = -angle
+
+    img = img.rotate(angle=angle, resample=Image.BICUBIC, expand=not iscurve)
+    compression_ratio = self.side/img.size[0] # img is square
+    img = img.resize((w, h), Image.BICUBIC)
+
+    # Get rotated keypoints location:
+    wh = np.array([w, h], np.float32)
+    kps_rel = joints_3d[...,:2] / wh
+    new_kps_rel = rotate(np.array([0.5,0.5], np.float32), kps_rel, -angle, compression_ratio)
+    new_kps = np.concatenate([new_kps_rel * wh, np.zeros([*new_kps_rel.shape[:-1], 1], np.float32)], axis=-1)
+
+    return img, new_kps
 
 
 @PIPELINES.register_module()
@@ -214,7 +275,24 @@ class CurveAugmentation:
   
   def __call__(self, results):
     if np.random.rand() <= self.curve_prob:
-      im, kps = self.curve(Image.fromarray(results['img']), results['ann_info'], results['joints_3d'], results['joints_3d_visible'])
+      im, kps = self.curve(Image.fromarray(results['img']), results['ann_info'], results['joints_3d'], results['joints_3d_visible'], 0.5)
+      results['img'] = np.asarray(im)
+      results['joints_3d'] = kps.astype(np.float32)
+    return results
+
+
+@PIPELINES.register_module()
+class RotateAugmentation:
+  def __init__(self,
+               rotate_prob=0.3,
+               magnitude=0):
+    self.rotate_prob = rotate_prob
+    self.rot = Rotate()
+    self.magnitude = magnitude
+  
+  def __call__(self, results):
+    if np.random.rand() <= self.rotate_prob:
+      im, kps = self.rot(Image.fromarray(results['img']), results['joints_3d'], mag=self.magnitude)
       results['img'] = np.asarray(im)
       results['joints_3d'] = kps.astype(np.float32)
     return results
